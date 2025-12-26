@@ -234,6 +234,22 @@ class TestToPrompt(unittest.TestCase):
             self.assertIn("&lt;script&gt;", xml)
             self.assertIn("&amp;", xml)
 
+    def test_yaml_format(self):
+        """Should generate YAML output."""
+        output = to_prompt([FIXTURES_DIR / "valid-skill"], fmt="yaml")
+        self.assertIn("available_skills:", output)
+        self.assertIn("name: valid-skill", output)
+        self.assertIn("description:", output)
+        self.assertIn("location:", output)
+
+    def test_json_format(self):
+        """Should generate JSON output."""
+        output = to_prompt([FIXTURES_DIR / "valid-skill"], fmt="json")
+        data = json.loads(output)
+        self.assertIn("available_skills", data)
+        self.assertEqual(len(data["available_skills"]), 1)
+        self.assertEqual(data["available_skills"][0]["name"], "valid-skill")
+
 
 class TestSkillProperties(unittest.TestCase):
     """Tests for SkillProperties dataclass."""

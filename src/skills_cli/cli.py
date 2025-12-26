@@ -308,39 +308,60 @@ def validate(skill_dir: Path) -> list[str]:
 # ============================================================================
 
 
-def to_prompt(skill_dirs: list[Path]) -> str:
-    """Generate the <available_skills> XML block for agent prompts.
-
-    Args:
-        skill_dirs: List of paths to skill directories
-
-    Returns:
-        XML string with <available_skills> block
-    """
-    if not skill_dirs:
-        return "<available_skills>\n</available_skills>"
-
-    lines = ["<available_skills>"]
-
+def _build_skill_data(skill_dirs: list[Path]) -> list[dict[str, str]]:
+    """Build skill data list for prompt generation."""
+    skills = []
     for skill_dir in skill_dirs:
         skill_dir = Path(skill_dir).resolve()
         props = read_properties(skill_dir)
+        skill_md_path = find_skill_md(skill_dir)
+        skills.append(
+            {
+                "name": props.name,
+                "description": props.description,
+                "location": str(skill_md_path),
+            }
+        )
+    return skills
 
+
+def to_prompt(skill_dirs: list[Path], fmt: str = "xml") -> str:
+    """Generate available skills block for agent prompts.
+
+    Args:
+        skill_dirs: List of paths to skill directories
+        fmt: Output format - "xml", "yaml", or "json"
+
+    Returns:
+        Formatted string with available skills
+    """
+    skills = _build_skill_data(skill_dirs)
+
+    if fmt == "json":
+        return json.dumps({"available_skills": skills}, indent=2)
+
+    if fmt == "yaml":
+        return yaml.dump(
+            {"available_skills": skills}, default_flow_style=False, sort_keys=False
+        )
+
+    # Default: XML format
+    if not skills:
+        return "<available_skills>\n</available_skills>"
+
+    lines = ["<available_skills>"]
+    for skill in skills:
         lines.append("<skill>")
         lines.append("<name>")
-        lines.append(html.escape(props.name))
+        lines.append(html.escape(skill["name"]))
         lines.append("</name>")
         lines.append("<description>")
-        lines.append(html.escape(props.description))
+        lines.append(html.escape(skill["description"]))
         lines.append("</description>")
-
-        skill_md_path = find_skill_md(skill_dir)
         lines.append("<location>")
-        lines.append(str(skill_md_path))
+        lines.append(skill["location"])
         lines.append("</location>")
-
         lines.append("</skill>")
-
     lines.append("</available_skills>")
 
     return "\n".join(lines)
@@ -771,7 +792,7 @@ def cmd_read_properties(args: argparse.Namespace) -> int:
 
 
 def cmd_to_prompt(args: argparse.Namespace) -> int:
-    """Generate <available_skills> XML for agent prompts."""
+    """Generate available skills for agent prompts."""
     skill_paths = []
     for path_str in args.skill_paths:
         path = Path(path_str).resolve()
@@ -780,8 +801,10 @@ def cmd_to_prompt(args: argparse.Namespace) -> int:
             path = path.parent
         skill_paths.append(path)
 
+    fmt = getattr(args, "format", "xml")
+
     try:
-        output = to_prompt(skill_paths)
+        output = to_prompt(skill_paths, fmt=fmt)
         print(output)
         return 0
     except ValueError as e:
@@ -900,10 +923,17 @@ def main() -> None:
 
     # to-prompt
     to_prompt_parser = subparsers.add_parser(
-        "to-prompt", help="Generate <available_skills> XML for agent prompts"
+        "to-prompt", help="Generate available skills for agent prompts"
     )
     to_prompt_parser.add_argument(
         "skill_paths", nargs="+", help="Paths to skill directories"
+    )
+    to_prompt_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["xml", "yaml", "json"],
+        default="xml",
+        help="Output format (default: xml)",
     )
 
     # list

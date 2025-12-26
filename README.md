@@ -4,16 +4,10 @@ A CLI tool for managing [Agent Skills](https://agentskills.io/) - the open forma
 
 ## Installation
 
-```bash
-pip install skills-cli
-```
-
-Or install from source:
+I recommend installing globally with `uv` as a tool, which will make it available across your system.
 
 ```bash
-git clone https://github.com/your-username/skills-cli
-cd skills-cli
-pip install -e .
+uv tool install skills-cli
 ```
 
 ## What are Agent Skills?

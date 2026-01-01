@@ -701,6 +701,7 @@ def cmd_push(args: argparse.Namespace) -> int:
     headers = {
         "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "skills-2025-10-02",
         "content-type": "application/json",
     }
 

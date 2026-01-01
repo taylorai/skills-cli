@@ -6,7 +6,6 @@ Copyright Anthropic, PBC.
 """
 
 import argparse
-import base64
 import html
 import io
 import json
@@ -669,32 +668,18 @@ def cmd_push(args: argparse.Namespace) -> int:
         return 1
 
     props = read_properties(skill_path)
-    skill_md = find_skill_md(skill_path)
 
-    # Read SKILL.md content
-    assert skill_md is not None, "skill not found"
-    skill_md_content = skill_md.read_text()
-
-    # Collect all files in the skill
-    files = {}
+    # Collect all files for multipart upload
+    # Format: list of tuples (field_name, (filename, content, content_type))
+    files_for_upload = []
+    skill_dir_name = skill_path.name
     for file in skill_path.rglob("*"):
         if file.is_file():
-            rel_path = str(file.relative_to(skill_path))
-            try:
-                files[rel_path] = file.read_text()
-            except UnicodeDecodeError:
-                # Binary file - base64 encode it
-                files[rel_path] = (
-                    f"base64:{base64.b64encode(file.read_bytes()).decode()}"
-                )
-
-    # Build payload
-    payload = {
-        "name": props.name,
-        "description": props.description,
-        "content": skill_md_content,
-        "files": files,
-    }
+            rel_path = file.relative_to(skill_path)
+            # Include skill directory name in the path like the curl example
+            full_path = f"{skill_dir_name}/{rel_path}"
+            content = file.read_bytes()
+            files_for_upload.append(("files[]", (full_path, content)))
 
     # Build request
     base_url = os.environ.get("ANTHROPIC_API_URL", "https://api.anthropic.com")
@@ -702,8 +687,10 @@ def cmd_push(args: argparse.Namespace) -> int:
         "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
         "anthropic-beta": "skills-2025-10-02",
-        "content-type": "application/json",
     }
+
+    # Form data for display_title
+    data = {"display_title": props.name}
 
     # Try to create or update
     url = f"{base_url}/v1/skills"
@@ -712,9 +699,13 @@ def cmd_push(args: argparse.Namespace) -> int:
 
     try:
         if args.update:
-            response = httpx.put(url, json=payload, headers=headers)
+            response = httpx.put(
+                url, data=data, files=files_for_upload, headers=headers
+            )
         else:
-            response = httpx.post(url, json=payload, headers=headers)
+            response = httpx.post(
+                url, data=data, files=files_for_upload, headers=headers
+            )
 
         response.raise_for_status()
         result = response.json()
@@ -722,6 +713,8 @@ def cmd_push(args: argparse.Namespace) -> int:
         print(f"{action} skill: {props.name}")
         if "id" in result:
             print(f"Skill ID: {result['id']}")
+        if "latest_version" in result:
+            print(f"Version: {result['latest_version']}")
         return 0
     except httpx.HTTPStatusError as e:
         try:
